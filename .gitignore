@@ -1,0 +1,82 @@
+# Datasets grandes
+data/*.csv
+data/statenet/*.csv
+data/statenet/prefix_*.csv
+
+# Mantener estructura pero excluir archivos grandes
+!data/statenet/meta.json
+# Permitir archivos de muestra para pruebas
+!data/statenet/prefix_train_sample.csv
+!data/statenet/prefix_val_sample.csv
+!data/statenet/prefix_test_sample.csv
+# Permitir dataset6000.csv (9.6MB - dentro del límite)
+!data/dataset6000.csv
+
+# Modelos entrenados y checkpoints
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.pb
+*.onnx
+checkpoints/
+models/
+saved_models/
+runs/
+wandb/
+artifacts/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.temp
+temp_*.csv
+*_temp.csv
+.DS_Store
+
+# Archivos de configuración local
+.env
+.env.local
+
