@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-StateNet - Entrenamiento completo para Colab
+StateNet - Entrenamiento completo (Colab y Local)
 Script standalone que incluye todo lo necesario para entrenar.
+Funciona tanto en Google Colab como en local usando rutas relativas.
 """
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -16,34 +18,22 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 
 # ============================================================================
-# CONFIGURACIÓN
+# DETECCIÓN DE ENTORNO Y RUTAS
 # ============================================================================
 
-CONFIG = {
-    # Rutas (ajustar según tu estructura en Colab)
-    "vocab_path": "/content/StateNet/vocab_char_to_id.json",
-    "data_dir": "/content/StateNet/data/statenet",
-    "output_dir": "/content/StateNet/checkpoints",
-    
-    # Hiperparámetros del modelo
-    "emb_dim": 128,
-    "hidden_dim": 256,
-    "d_state": 128,
-    "num_layers": 1,
-    "rnn_type": "GRU",  # "GRU" o "LSTM"
-    "use_dfa_embedding": False,
-    "dfa_emb_dim": 16,
-    
-    # Hiperparámetros de entrenamiento
-    "batch_size": 64,
-    "lr": 1e-3,
-    "lambda_label": 1.0,
-    "max_epochs": 50,
-    "patience": 5,
-    
-    # Dispositivo (se detecta automáticamente)
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-}
+def get_base_path():
+    """Detecta si estamos en Colab o local y retorna la ruta base."""
+    # Detectar si estamos en Colab
+    if os.path.exists("/content"):
+        # En Colab: usar /content/StateNet
+        base = Path("/content/StateNet")
+    else:
+        # En local: usar ruta relativa desde este script
+        # Este script está en scripts/, subimos 1 nivel para llegar a la raíz
+        base = Path(__file__).resolve().parents[1]
+    return base
+
+BASE_PATH = get_base_path()
 
 # ============================================================================
 # MODELO STATEENCODER
@@ -312,15 +302,121 @@ def validate(model, dataloader, device, lambda_label):
 # PIPELINE PRINCIPAL
 # ============================================================================
 
+def parse_args():
+    """Parsea argumentos de línea de comandos o usa valores por defecto."""
+    parser = argparse.ArgumentParser(description="Entrenar StateEncoder")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=BASE_PATH / "data" / "statenet",
+        help="Directorio con prefix_train.csv y prefix_val.csv",
+    )
+    parser.add_argument(
+        "--vocab",
+        type=Path,
+        default=BASE_PATH / "vocab_char_to_id.json",
+        help="Ruta al vocabulario",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=BASE_PATH / "checkpoints",
+        help="Directorio para guardar checkpoints",
+    )
+    parser.add_argument(
+        "--emb-dim",
+        type=int,
+        default=128,
+        help="Dimensión de embedding",
+    )
+    parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=256,
+        help="Dimensión oculta del RNN",
+    )
+    parser.add_argument(
+        "--d-state",
+        type=int,
+        default=128,
+        help="Dimensión del estado codificado",
+    )
+    parser.add_argument(
+        "--num-layers",
+        type=int,
+        default=1,
+        help="Número de capas RNN",
+    )
+    parser.add_argument(
+        "--rnn-type",
+        type=str,
+        default="GRU",
+        choices=["GRU", "LSTM"],
+        help="Tipo de RNN",
+    )
+    parser.add_argument(
+        "--use-dfa-embedding",
+        action="store_true",
+        help="Usar embedding de dfa_id",
+    )
+    parser.add_argument(
+        "--dfa-emb-dim",
+        type=int,
+        default=16,
+        help="Dimensión del embedding de DFA",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=64,
+        help="Tamaño de batch",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1e-3,
+        help="Learning rate",
+    )
+    parser.add_argument(
+        "--lambda-label",
+        type=float,
+        default=1.0,
+        help="Peso λ para loss de final_label",
+    )
+    parser.add_argument(
+        "--max-epochs",
+        type=int,
+        default=50,
+        help="Máximo número de épocas",
+    )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=5,
+        help="Paciencia para early stopping",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        help="Dispositivo (cuda/cpu). Si no se especifica, se detecta automáticamente",
+    )
+    return parser.parse_args()
+
+
 def main():
-    config = CONFIG.copy()
+    args = parse_args()
+    
+    # Detectar dispositivo si no se especificó
+    if args.device is None:
+        args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(args.device)
     
     print("=" * 60)
-    print("🚀 StateNet - Entrenamiento en Colab")
+    print("🚀 StateNet - Entrenamiento")
     print("=" * 60)
     
     # Verificar GPU
-    device = torch.device(config["device"])
     print(f"\n📱 Dispositivo: {device}")
     if torch.cuda.is_available():
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
@@ -329,14 +425,14 @@ def main():
     # Verificar archivos
     print("\n📋 Verificando archivos...")
     required_files = [
-        config["vocab_path"],
-        f"{config['data_dir']}/prefix_train.csv",
-        f"{config['data_dir']}/prefix_val.csv",
-        f"{config['data_dir']}/meta.json"
+        args.vocab,
+        args.data_dir / "prefix_train.csv",
+        args.data_dir / "prefix_val.csv",
+        args.data_dir / "meta.json"
     ]
     
     for file in required_files:
-        if os.path.exists(file):
+        if file.exists():
             print(f"   ✓ {file}")
         else:
             print(f"   ✗ FALTA: {file}")
@@ -344,7 +440,7 @@ def main():
     
     # Cargar vocabulario
     print("\n📚 Cargando vocabulario...")
-    with open(config["vocab_path"], 'r') as f:
+    with open(args.vocab, 'r') as f:
         vocab = json.load(f)
     vocab_size = len(vocab)
     print(f"   Vocab size: {vocab_size}")
@@ -354,28 +450,35 @@ def main():
     symbol_to_idx = {sym: idx for idx, sym in enumerate(symbols)}
     
     # Cargar meta
-    with open(f"{config['data_dir']}/meta.json", 'r') as f:
+    with open(args.data_dir / "meta.json", 'r') as f:
         meta = json.load(f)
     max_len = meta['max_len']
     print(f"   Max len: {max_len}")
     
+    # Obtener número de DFAs si se usa embedding
+    if args.use_dfa_embedding:
+        train_df = pd.read_csv(args.data_dir / "prefix_train.csv", usecols=["dfa_id"])
+        num_dfas = int(train_df["dfa_id"].max() + 1)
+    else:
+        num_dfas = None
+    
     # Crear datasets
     print("\n📊 Cargando datasets...")
     train_dataset = PrefixDataset(
-        f"{config['data_dir']}/prefix_train.csv",
+        args.data_dir / "prefix_train.csv",
         vocab, symbol_to_idx, max_len
     )
     val_dataset = PrefixDataset(
-        f"{config['data_dir']}/prefix_val.csv",
+        args.data_dir / "prefix_val.csv",
         vocab, symbol_to_idx, max_len
     )
     
     train_loader = DataLoader(
-        train_dataset, batch_size=config['batch_size'],
+        train_dataset, batch_size=args.batch_size,
         shuffle=True, collate_fn=collate_fn
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=config['batch_size'],
+        val_dataset, batch_size=args.batch_size,
         shuffle=False, collate_fn=collate_fn
     )
     
@@ -386,15 +489,15 @@ def main():
     print("\n🧠 Creando modelo...")
     encoder = StateEncoder(
         vocab_size=vocab_size,
-        emb_dim=config['emb_dim'],
-        hidden_dim=config['hidden_dim'],
-        d_state=config['d_state'],
+        emb_dim=args.emb_dim,
+        hidden_dim=args.hidden_dim,
+        d_state=args.d_state,
         max_len=max_len,
-        num_layers=config['num_layers'],
-        rnn_type=config['rnn_type'],
-        use_dfa_embedding=config['use_dfa_embedding'],
-        num_dfas=None,  # Se calcularía si use_dfa_embedding=True
-        dfa_emb_dim=config['dfa_emb_dim'],
+        num_layers=args.num_layers,
+        rnn_type=args.rnn_type,
+        use_dfa_embedding=args.use_dfa_embedding,
+        num_dfas=num_dfas,
+        dfa_emb_dim=args.dfa_emb_dim,
         padding_idx=vocab['<PAD>'],
     )
     
@@ -408,10 +511,10 @@ def main():
     print(f"   Parámetros entrenables: {trainable_params:,}")
     
     # Optimizador
-    optimizer = optim.Adam(model.parameters(), lr=config['lr'])
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
     # Crear directorio de salida
-    Path(config['output_dir']).mkdir(parents=True, exist_ok=True)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     
     # Entrenamiento
     print("\n🎯 Iniciando entrenamiento...")
@@ -428,9 +531,9 @@ def main():
     patience_counter = 0
     train_log = []
     
-    for epoch in range(1, config['max_epochs'] + 1):
-        train_metrics = train_epoch(model, train_loader, optimizer, device, config['lambda_label'])
-        val_metrics = validate(model, val_loader, device, config['lambda_label'])
+    for epoch in range(1, args.max_epochs + 1):
+        train_metrics = train_epoch(model, train_loader, optimizer, device, args.lambda_label)
+        val_metrics = validate(model, val_loader, device, args.lambda_label)
         
         # Mostrar métricas y uso de GPU
         gpu_info = ""
@@ -440,7 +543,7 @@ def main():
             gpu_info = f" | GPU: {gpu_used:.2f}/{gpu_reserved:.2f} GB"
         
         print(
-            f"Epoch {epoch:3d}/{config['max_epochs']} | "
+            f"Epoch {epoch:3d}/{args.max_epochs} | "
             f"Train Loss: {train_metrics['total_loss']:.4f} "
             f"(CE: {train_metrics['ce_loss']:.4f}, BCE: {train_metrics['bce_loss']:.4f}) | "
             f"Train Acc: next={train_metrics['next_symbol_acc']:.4f}, label={train_metrics['final_label_acc']:.4f} | "
@@ -461,40 +564,40 @@ def main():
             patience_counter = 0
             
             # Guardar modelo
-            torch.save(encoder.state_dict(), f"{config['output_dir']}/state_encoder.pth")
+            torch.save(encoder.state_dict(), args.output_dir / "state_encoder.pth")
             
             # Guardar hparams
             hparams = {
                 'vocab_size': vocab_size,
-                'emb_dim': config['emb_dim'],
-                'hidden_dim': config['hidden_dim'],
-                'd_state': config['d_state'],
+                'emb_dim': args.emb_dim,
+                'hidden_dim': args.hidden_dim,
+                'd_state': args.d_state,
                 'max_len': max_len,
-                'num_layers': config['num_layers'],
-                'rnn_type': config['rnn_type'],
-                'use_dfa_embedding': config['use_dfa_embedding'],
-                'dfa_emb_dim': config['dfa_emb_dim'] if config['use_dfa_embedding'] else None,
-                'num_dfas': None,
+                'num_layers': args.num_layers,
+                'rnn_type': args.rnn_type,
+                'use_dfa_embedding': args.use_dfa_embedding,
+                'dfa_emb_dim': args.dfa_emb_dim if args.use_dfa_embedding else None,
+                'num_dfas': num_dfas if args.use_dfa_embedding else None,
                 'padding_idx': vocab['<PAD>'],
             }
-            with open(f"{config['output_dir']}/statenet_hparams.json", 'w') as f:
+            with open(args.output_dir / "statenet_hparams.json", 'w') as f:
                 json.dump(hparams, f, indent=2)
             
             print(f"  ✓ Modelo guardado (val_loss={best_val_loss:.4f})")
         else:
             patience_counter += 1
-            if patience_counter >= config['patience']:
+            if patience_counter >= args.patience:
                 print(f"\n⏹️  Early stopping en epoch {epoch}")
                 break
     
     # Guardar log
     log_df = pd.DataFrame(train_log)
-    log_df.to_csv(f"{config['output_dir']}/train_log.csv", index=False)
+    log_df.to_csv(args.output_dir / "train_log.csv", index=False)
     
     print("\n" + "=" * 60)
     print("✅ Entrenamiento completado!")
     print(f"   Mejor val_loss: {best_val_loss:.4f}")
-    print(f"   Modelo guardado en: {config['output_dir']}/state_encoder.pth")
+    print(f"   Modelo guardado en: {args.output_dir / 'state_encoder.pth'}")
     
     # Mostrar uso final de GPU
     if torch.cuda.is_available():

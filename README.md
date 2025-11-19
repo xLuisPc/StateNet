@@ -85,10 +85,13 @@ Esto genera los archivos CSV en `data/statenet/`.
 
 ### 2. Entrenar modelo
 
-#### Opción A: Entrenamiento local
+El script `scripts/train.py` funciona tanto en local como en Colab, detectando automáticamente el entorno.
+
+#### Entrenamiento (Local o Colab)
 
 ```bash
-python src/train.py \
+# En local
+python scripts/train.py \
     --emb-dim 128 \
     --hidden-dim 256 \
     --d-state 128 \
@@ -99,22 +102,14 @@ python src/train.py \
     --patience 5
 ```
 
-#### Opción B: Entrenamiento en Colab
-
-1. Sube `scripts/colab/train_colab.py` a Colab
-2. Ajusta las rutas en `CONFIG` si es necesario
-3. Ejecuta:
+O en Colab:
 
 ```python
-exec(open('train_colab.py').read())
+# En Colab
+exec(open('/content/StateNet/scripts/train.py').read())
 ```
 
-O importa y ejecuta:
-
-```python
-from train_colab import main
-main()
-```
+El script detecta automáticamente si está en Colab (`/content` existe) o en local y ajusta las rutas.
 
 **Archivos necesarios:**
 - `vocab_char_to_id.json` - Vocabulario
@@ -141,15 +136,26 @@ python tests/evaluate_model.py
 
 Evalúa el modelo con muestras de los datasets reales (train/val/test) y muestra métricas de rendimiento.
 
-### 4. Generar estados discretos (Colab)
+### 4. Generar estados discretos
 
 Después de entrenar, genera embeddings, discretiza con k-means, construye transiciones y marca estados de aceptación:
 
-1. Sube `scripts/colab/statenet_colab.py` a Colab
-2. Ejecuta:
+```bash
+# En local
+python scripts/generate_states.py
+```
+
+O en Colab:
 
 ```python
-from statenet_colab import run_pipeline, CONFIG
+# En Colab
+exec(open('/content/StateNet/scripts/generate_states.py').read())
+```
+
+O importa y ejecuta:
+
+```python
+from scripts.generate_states import run_pipeline, CONFIG
 
 run_pipeline(
     model_path="/content/StateNet/checkpoints/state_encoder.pth",

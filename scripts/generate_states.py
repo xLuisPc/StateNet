@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-StateNet - Pipeline completo para Colab
+StateNet - Generación de Estados Discretos (Colab y Local)
 Combina generación de embeddings, discretización, validación y exportación.
+Funciona tanto en Google Colab como en local usando rutas relativas.
 """
 
 import json
 import os
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, List
@@ -15,6 +17,29 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from sklearn.cluster import KMeans
+
+try:
+    import psutil  # type: ignore
+except ImportError:  # pragma: no cover
+    psutil = None
+
+# ============================================================================
+# DETECCIÓN DE ENTORNO Y RUTAS
+# ============================================================================
+
+def get_base_path():
+    """Detecta si estamos en Colab o local y retorna la ruta base."""
+    # Detectar si estamos en Colab
+    if os.path.exists("/content"):
+        # En Colab: usar /content/StateNet
+        base = Path("/content/StateNet")
+    else:
+        # En local: usar ruta relativa desde este script
+        # Este script está en scripts/, subimos 1 nivel para llegar a la raíz
+        base = Path(__file__).resolve().parents[1]
+    return base
+
+BASE_PATH = get_base_path()
 
 # ============================================================================
 # CONFIGURACIÓN
@@ -560,6 +585,19 @@ def run_pipeline(
     device = torch.device(config["device"])
     print(f"🚀 Iniciando pipeline en {device}")
     print(f"Configuración: {config}\n")
+
+    start_time = time.time()
+    process = psutil.Process(os.getpid()) if psutil else None
+    mem_start = process.memory_info().rss if process else None
+    if psutil:
+        psutil.cpu_percent(interval=None)  # inicializa medición
+
+    gpu_enabled = device.type == "cuda" and torch.cuda.is_available()
+    if gpu_enabled:
+        torch.cuda.reset_peak_memory_stats()
+        print(f"💻 GPU: {torch.cuda.get_device_name(0)}")
+        total_mem = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"   Memoria total GPU: {total_mem:.2f} GB\n")
     
     # 1. Cargar vocabulario
     print("1. Cargando vocabulario...")
@@ -642,6 +680,11 @@ def run_pipeline(
     
     # 11. Exportar formato final
     print("11. Exportando formato final...")
+    
+    # Crear directorio de salida si no existe
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     states_for_acceptnet = {}
     for dfa_id, data in validated_states.items():
         # Convertir arrays de numpy a tensores de PyTorch para compatibilidad
@@ -682,7 +725,27 @@ def run_pipeline(
     print(f"  ✓ Guardado en {output_path}")
     print(f"  {len(states_for_acceptnet)} DFAs exportados\n")
     
+    elapsed = time.time() - start_time
     print("✅ Pipeline completado exitosamente!")
+    print(f"⏱️  Tiempo total: {elapsed / 60:.2f} min ({elapsed:.1f} s)")
+    
+    if process:
+        mem_end = process.memory_info().rss
+        delta_gb = (mem_end - mem_start) / 1e9 if mem_start is not None else 0.0
+        print(f"🧠 RAM proceso: {mem_end / 1e9:.2f} GB (Δ {delta_gb:+.2f} GB)")
+    if psutil:
+        cpu_usage = psutil.cpu_percent(interval=0.3)
+        vm = psutil.virtual_memory()
+        print(f"⚙️  CPU promedio (último muestreo): {cpu_usage:.1f}%")
+        print(f"📦 RAM sistema: usada {vm.used / 1e9:.2f} GB / total {vm.total / 1e9:.2f} GB")
+    
+    if gpu_enabled:
+        current_alloc = torch.cuda.memory_allocated(0) / 1e9
+        reserved = torch.cuda.memory_reserved(0) / 1e9
+        peak_alloc = torch.cuda.max_memory_allocated(0) / 1e9
+        print(f"🎮 GPU RAM actual: {current_alloc:.2f} GB (reservada {reserved:.2f} GB)")
+        print(f"   Pico de uso GPU: {peak_alloc:.2f} GB")
+    
     return states_for_acceptnet
 
 
@@ -691,16 +754,16 @@ def run_pipeline(
 # ============================================================================
 
 if __name__ == "__main__":
-    # Ejemplo de uso para Colab (ajustar rutas según tu estructura)
+    # Ejemplo de uso (funciona en Colab y local automáticamente)
     run_pipeline(
-        model_path="/content/StateNet/checkpoints/state_encoder.pth",
-        hparams_path="/content/StateNet/checkpoints/statenet_hparams.json",
-        vocab_path="/content/StateNet/vocab_char_to_id.json",
-        train_csv_path="/content/StateNet/data/statenet/prefix_train.csv",
-        val_csv_path="/content/StateNet/data/statenet/prefix_val.csv",
-        output_path="/content/StateNet/artifacts/statenet/states_for_acceptnet.pt",
-        test_csv_path="/content/StateNet/data/statenet/prefix_test.csv",  # Opcional
-        alphabet_pred_path=None,  # Opcional: "/content/StateNet/artifacts/alphabetnet/alphabet_pred.json"
+        model_path=str(BASE_PATH / "checkpoints" / "state_encoder.pth"),
+        hparams_path=str(BASE_PATH / "checkpoints" / "statenet_hparams.json"),
+        vocab_path=str(BASE_PATH / "vocab_char_to_id.json"),
+        train_csv_path=str(BASE_PATH / "data" / "statenet" / "prefix_train.csv"),
+        val_csv_path=str(BASE_PATH / "data" / "statenet" / "prefix_val.csv"),
+        output_path=str(BASE_PATH / "artifacts" / "statenet" / "states_for_acceptnet.pt"),
+        test_csv_path=str(BASE_PATH / "data" / "statenet" / "prefix_test.csv"),  # Opcional
+        alphabet_pred_path=None,  # Opcional: str(BASE_PATH / "artifacts" / "alphabetnet" / "alphabet_pred.json")
         config=CONFIG
     )
 
