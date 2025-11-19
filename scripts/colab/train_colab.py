@@ -330,8 +330,8 @@ def main():
     print("\n📋 Verificando archivos...")
     required_files = [
         config["vocab_path"],
-        f"{config['data_dir']}/prefix_train_sample.csv",
-        f"{config['data_dir']}/prefix_val_sample.csv",
+        f"{config['data_dir']}/prefix_train.csv",
+        f"{config['data_dir']}/prefix_val.csv",
         f"{config['data_dir']}/meta.json"
     ]
     
@@ -361,13 +361,12 @@ def main():
     
     # Crear datasets
     print("\n📊 Cargando datasets...")
-    print("   ⚠️  Usando versiones de muestra para pruebas")
     train_dataset = PrefixDataset(
-        f"{config['data_dir']}/prefix_train_sample.csv",
+        f"{config['data_dir']}/prefix_train.csv",
         vocab, symbol_to_idx, max_len
     )
     val_dataset = PrefixDataset(
-        f"{config['data_dir']}/prefix_val_sample.csv",
+        f"{config['data_dir']}/prefix_val.csv",
         vocab, symbol_to_idx, max_len
     )
     
@@ -418,6 +417,13 @@ def main():
     print("\n🎯 Iniciando entrenamiento...")
     print("=" * 60)
     
+    # Verificar uso de GPU RAM
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+        print(f"\n💾 Estado inicial GPU:")
+        print(f"   RAM usada: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"   RAM reservada: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+    
     best_val_loss = float('inf')
     patience_counter = 0
     train_log = []
@@ -426,6 +432,13 @@ def main():
         train_metrics = train_epoch(model, train_loader, optimizer, device, config['lambda_label'])
         val_metrics = validate(model, val_loader, device, config['lambda_label'])
         
+        # Mostrar métricas y uso de GPU
+        gpu_info = ""
+        if torch.cuda.is_available():
+            gpu_used = torch.cuda.memory_allocated(0) / 1e9
+            gpu_reserved = torch.cuda.memory_reserved(0) / 1e9
+            gpu_info = f" | GPU: {gpu_used:.2f}/{gpu_reserved:.2f} GB"
+        
         print(
             f"Epoch {epoch:3d}/{config['max_epochs']} | "
             f"Train Loss: {train_metrics['total_loss']:.4f} "
@@ -433,6 +446,7 @@ def main():
             f"Train Acc: next={train_metrics['next_symbol_acc']:.4f}, label={train_metrics['final_label_acc']:.4f} | "
             f"Val Loss: {val_metrics['total_loss']:.4f} | "
             f"Val Acc: next={val_metrics['next_symbol_acc']:.4f}, label={val_metrics['final_label_acc']:.4f}"
+            + gpu_info
         )
         
         train_log.append({
@@ -481,6 +495,15 @@ def main():
     print("✅ Entrenamiento completado!")
     print(f"   Mejor val_loss: {best_val_loss:.4f}")
     print(f"   Modelo guardado en: {config['output_dir']}/state_encoder.pth")
+    
+    # Mostrar uso final de GPU
+    if torch.cuda.is_available():
+        peak_used = torch.cuda.max_memory_allocated(0) / 1e9
+        peak_reserved = torch.cuda.max_memory_reserved(0) / 1e9
+        print(f"\n💾 Uso máximo de GPU durante entrenamiento:")
+        print(f"   RAM usada (pico): {peak_used:.2f} GB")
+        print(f"   RAM reservada (pico): {peak_reserved:.2f} GB")
+    
     print("=" * 60)
 
 

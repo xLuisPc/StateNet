@@ -691,16 +691,16 @@ def run_pipeline(
 # ============================================================================
 
 if __name__ == "__main__":
-    # Ejemplo de uso (ajustar rutas según tu entorno)
+    # Ejemplo de uso para Colab (ajustar rutas según tu estructura)
     run_pipeline(
-        model_path="checkpoints/state_encoder.pth",
-        hparams_path="checkpoints/statenet_hparams.json",
-        vocab_path="vocab_char_to_id.json",
-        train_csv_path="data/statenet/prefix_train.csv",
-        val_csv_path="data/statenet/prefix_val.csv",
-        output_path="artifacts/statenet/states_for_acceptnet.pt",
-        test_csv_path="data/statenet/prefix_test.csv",  # Opcional
-        alphabet_pred_path=None,  # Opcional: "artifacts/alphabetnet/alphabet_pred.json"
+        model_path="/content/StateNet/checkpoints/state_encoder.pth",
+        hparams_path="/content/StateNet/checkpoints/statenet_hparams.json",
+        vocab_path="/content/StateNet/vocab_char_to_id.json",
+        train_csv_path="/content/StateNet/data/statenet/prefix_train.csv",
+        val_csv_path="/content/StateNet/data/statenet/prefix_val.csv",
+        output_path="/content/StateNet/artifacts/statenet/states_for_acceptnet.pt",
+        test_csv_path="/content/StateNet/data/statenet/prefix_test.csv",  # Opcional
+        alphabet_pred_path=None,  # Opcional: "/content/StateNet/artifacts/alphabetnet/alphabet_pred.json"
         config=CONFIG
     )
 
